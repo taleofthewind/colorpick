@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+    <style>
+        body{
+            padding: 0;
+            margin: 0;
+            font-size: 12px;
+        }
+        section{
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-items: center;
+        }
+        
+        .sideNav{
+            padding: 1rem;
+            flex-basis: 20%;
+            background-color: rgb(195, 195, 195);
+        }
+        .content{
+            flex-basis: 100%;
+            background-color: rgb(191, 191, 191);
+            display: grid;
+            place-content: center;
+        }
+        form{
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+<body>
+    <section>
+        <nav class="sideNav">
+            <input type="file" id="imageInput" accept="image/*">
+            
+            <h1>Settings to replace colors</h1>
+            <div id="colorInfo">Color that should be replaced: <span id="pickedColor"></span></div>
+            <form>
+                <div class="formGroup">
+                    <label for="color">Replace the selected color with:</label>
+                    <input type="color" id="color" name="color" value="#ff0000">
+                </div>
+                <div class="formGroup">
+                    <label for="threshold">Threshold:</label>
+                    <input type="number" id="threshold" name="threshold" min="1" max="100" value="25">
+                </div>
+            </form>
+            <div id="selected-color">Selected color: <span id="color-value">#ff0000</span></div>
+            <button id="switchColorButton">Switch Color</button>
+        </nav>
+        <div class="content">
+            <canvas id="colorPickerCanvas"></canvas>
+        </div>
+    </section>
+
+    <script>
+        const colorInput = document.getElementById('color');
+        const colorValue = document.getElementById('color-value');
+        const thresholdInput = document.getElementById('threshold');
+
+        colorInput.addEventListener('input', function() {
+            const selectedColor = colorInput.value;
+            colorValue.textContent = selectedColor;
+        });
+
+        const colorPickerCanvas = document.getElementById("colorPickerCanvas");
+        const pickedColor = document.getElementById("pickedColor");
+        const ctx1 = colorPickerCanvas.getContext("2d");
+
+        let Col = { r: 0, g: 0, b: 0 };
+        let Col2 = { r: 0, g: 0, b: 0 };
+
+        const switchColorButton = document.getElementById("switchColorButton");
+        const imageInput = document.getElementById("imageInput");
+
+        let image = new Image();
+        let imageData; // Initialize imageData
+
+        imageInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.src = e.target.result;
+                    const width = 600;
+                    const height = 600;
+                    img.width = width;
+                    img.height = height;
+                    img.onload = () => {
+                        // Display the image on the canvas
+                        colorPickerCanvas.width = img.width;
+                        colorPickerCanvas.height = img.height;
+                        ctx1.drawImage(img, 0, 0, img.width, img.height);
+
+                        // Add a click event listener to the canvas
+                        colorPickerCanvas.addEventListener("click", (event) => {
+                            const x = event.offsetX;
+                            const y = event.offsetY;
+
+                            // Get the color data of the clicked pixel
+                            const pixelData = ctx1.getImageData(x, y, 1, 1).data;
+
+                            // Convert the color data to a CSS color string
+                            const color = `rgb(${pixelData[0]}, ${pixelData[1]}, ${pixelData[2]})`;
+                            Col.r = pixelData[0];
+                            Col.g = pixelData[1];
+                            Col.b = pixelData[2];
+
+                            // Display the selected color
+                            pickedColor.textContent = color;
+                            pickedColor.style.backgroundColor = color;
+                        });
+
+                        // Initialize imageData with the image data
+                        imageData = ctx1.getImageData(0, 0, img.width, img.height);
+                    };
+                };
+
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function convertHexToRgb(hexIn) {
+            // Remove '#' if it's at the beginning of the input
+            const hex = hexIn.replace(/^#/, '');
+
+            // Convert hex to RGB
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+
+            Col2.r = r;
+            Col2.g = g;
+            Col2.b = b;
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        switchColorButton.addEventListener("click", function () {
+            convertHexToRgb(colorValue.textContent);
+            const targetColor = { r: Col.r, g: Col.g, b: Col.b };
+            const replacementColor = { r: Col2.r, g: Col2.g, b: Col2.b };
+            const threshold = parseInt(thresholdInput.value);
+
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                const red = imageData.data[i];
+                const green = imageData.data[i + 1];
+                const blue = imageData.data[i + 2];
+
+                if (
+                    Math.abs(red - targetColor.r) <= threshold &&
+                    Math.abs(green - targetColor.g) <= threshold &&
+                    Math.abs(blue - targetColor.b) <= threshold
+                ) {
+                    // Apply "multiply" blend mode with smoothing
+                    imageData.data[i] = lerp(red, (red * replacementColor.r) / 255, 0.3);
+                    imageData.data[i + 1] = lerp(green, (green * replacementColor.g) / 255, 0.3);
+                    imageData.data[i + 2] = lerp(blue, (blue * replacementColor.b) / 255, 0.3);
+                }
+            }
+
+            ctx1.putImageData(imageData, 0, 0);
+        });
+    </script>
+</body>
+</html>
